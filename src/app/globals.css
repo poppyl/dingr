@@ -15,14 +15,16 @@
 }
 
 body {
-  color: var(--foreground);
   background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  color: var(--foreground);
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }
 
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
+/* Azeret Mono for app title and headers */
+.font-display {
+  font-family: var(--font-azeret-mono), monospace;
 }
 
+h1, h2, .text-app-title {
+  font-family: var(--font-azeret-mono), monospace;
+}
