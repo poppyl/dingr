@@ -13,13 +13,35 @@ interface Leader {
 interface ActivityFormProps {
   eventId: string
   leaders: Leader[]
+  eventStartTime?: string
+  eventEndTime?: string
 }
 
-export default function ActivityForm({ eventId, leaders }: ActivityFormProps) {
+export default function ActivityForm({ eventId, leaders, eventStartTime, eventEndTime }: ActivityFormProps) {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [maxSignups, setMaxSignups] = useState<number | ''>('')
   const [ledBy, setLedBy] = useState('')
+  const [startTime, setStartTime] = useState(() => {
+    if (eventStartTime) {
+      const date = new Date(eventStartTime)
+      const hours = date.getHours().toString().padStart(2, '0')
+      const minutes = date.getMinutes().toString().padStart(2, '0')
+      return `${hours}:${minutes}`
+    }
+    return ''
+  })
+  const [endTime, setEndTime] = useState(() => {
+    if (eventEndTime) {
+      const date = new Date(eventEndTime)
+      const hours = date.getHours().toString().padStart(2, '0')
+      const minutes = date.getMinutes().toString().padStart(2, '0')
+      return `${hours}:${minutes}`
+    }
+    return ''
+  })
+  const [slotDurationMinutes, setSlotDurationMinutes] = useState<number | ''>(20)
+  const [requestDeadline, setRequestDeadline] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -31,6 +53,22 @@ export default function ActivityForm({ eventId, leaders }: ActivityFormProps) {
     setLoading(true)
     setError(null)
 
+    // Convert times to ISO strings if provided
+    let startTimeISO = null
+    let endTimeISO = null
+    if (eventStartTime && startTime) {
+      const eventDate = new Date(eventStartTime)
+      const [hours, minutes] = startTime.split(':')
+      eventDate.setHours(parseInt(hours), parseInt(minutes), 0, 0)
+      startTimeISO = eventDate.toISOString()
+    }
+    if (eventEndTime && endTime) {
+      const eventDate = new Date(eventEndTime)
+      const [hours, minutes] = endTime.split(':')
+      eventDate.setHours(parseInt(hours), parseInt(minutes), 0, 0)
+      endTimeISO = eventDate.toISOString()
+    }
+
     const { error } = await supabase
       .from('event_activities')
       .insert({
@@ -39,6 +77,10 @@ export default function ActivityForm({ eventId, leaders }: ActivityFormProps) {
         description: description || null,
         max_signups: maxSignups || null,
         led_by: ledBy || null,
+        start_time: startTimeISO,
+        end_time: endTimeISO,
+        slot_duration_minutes: slotDurationMinutes || null,
+        request_deadline: requestDeadline || null,
       })
 
     if (error) {
@@ -158,6 +200,76 @@ export default function ActivityForm({ eventId, leaders }: ActivityFormProps) {
         <p className="text-xs text-gray-500 mt-1">
           If set, players over this limit will be added to a waitlist.
         </p>
+      </div>
+
+      {/* Schedule Settings */}
+      <div className="pt-4 border-t border-gray-200">
+        <h3 className="text-sm font-medium text-gray-700 mb-3">Schedule Settings</h3>
+        
+        {/* Start and End Time */}
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <div>
+            <label htmlFor="startTime" className="block text-sm font-medium text-gray-700 mb-1">
+              Start Time
+            </label>
+            <input
+              id="startTime"
+              type="time"
+              value={startTime}
+              onChange={(e) => setStartTime(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+            />
+          </div>
+          <div>
+            <label htmlFor="endTime" className="block text-sm font-medium text-gray-700 mb-1">
+              End Time
+            </label>
+            <input
+              id="endTime"
+              type="time"
+              value={endTime}
+              onChange={(e) => setEndTime(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+            />
+          </div>
+        </div>
+
+        {/* Slot Duration */}
+        <div className="mb-4">
+          <label htmlFor="slotDuration" className="block text-sm font-medium text-gray-700 mb-1">
+            Slot Duration (minutes)
+          </label>
+          <input
+            id="slotDuration"
+            type="number"
+            min="5"
+            step="5"
+            value={slotDurationMinutes}
+            onChange={(e) => setSlotDurationMinutes(e.target.value ? parseInt(e.target.value) : '')}
+            placeholder="20"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+          />
+          <p className="text-xs text-gray-500 mt-1">
+            Duration of each time slot for this activity.
+          </p>
+        </div>
+
+        {/* Request Deadline */}
+        <div>
+          <label htmlFor="requestDeadline" className="block text-sm font-medium text-gray-700 mb-1">
+            Request Deadline (optional)
+          </label>
+          <input
+            id="requestDeadline"
+            type="datetime-local"
+            value={requestDeadline}
+            onChange={(e) => setRequestDeadline(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+          />
+          <p className="text-xs text-gray-500 mt-1">
+            Deadline for players to submit requests (optional).
+          </p>
+        </div>
       </div>
 
       <button

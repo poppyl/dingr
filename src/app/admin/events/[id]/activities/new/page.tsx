@@ -27,7 +27,7 @@ export default async function NewActivityPage({ params }: { params: Promise<{ id
   // Get event to verify it exists and is a training
   const { data: event, error } = await supabase
     .from('events')
-    .select('id, title, type')
+    .select('id, title, type, start_time, end_time')
     .eq('id', id)
     .single()
 
@@ -61,6 +61,8 @@ export default async function NewActivityPage({ params }: { params: Promise<{ id
           <ActivityForm 
             eventId={id} 
             leaders={teamMembers || []}
+            eventStartTime={event.start_time}
+            eventEndTime={event.end_time}
           />
         </div>
       </main>
