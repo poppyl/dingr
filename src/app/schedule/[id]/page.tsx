@@ -45,6 +45,9 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
         status,
         created_at,
         activity_id,
+        requested_duration,
+        working_on,
+        assigned_time,
         profile:profiles(id, full_name)
       ),
       activities:event_activities(
@@ -53,11 +56,18 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
         description,
         max_signups,
         led_by,
+        start_time,
+        end_time,
+        slot_duration_minutes,
+        schedule_published,
         leader:profiles!event_activities_led_by_fkey(full_name),
         signups:event_signups(
           id,
           status,
           created_at,
+          requested_duration,
+          working_on,
+          assigned_time,
           profile:profiles(id, full_name)
         )
       )
@@ -206,6 +216,18 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
               />
             </div>
           )}
+
+          {/* Score Game button - only for games */}
+          {event.type === 'game' && event.status !== 'cancelled' && (
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              <Link
+                href={`/score/${event.id}`}
+                className="block w-full py-3 bg-green-600 text-white text-center font-medium rounded-lg hover:bg-green-700"
+              >
+                ⚾ Score This Game
+              </Link>
+            </div>
+          )}
         </div>
 
         {/* Training activities */}
@@ -217,10 +239,10 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
               <div className="space-y-4">
                 {event.activities.map((activity: any) => {
                   const activitySignups = activity.signups || []
-                  const confirmedActivitySignups = activitySignups.filter((s: any) => s.status === 'confirmed')
-                  const waitlistSignups = activitySignups.filter((s: any) => s.status === 'waitlisted')
                   const userActivitySignup = activitySignups.find((s: any) => s.profile?.id === user.id)
-                  const spotsLeft = activity.max_signups ? activity.max_signups - confirmedActivitySignups.length : null
+                  const requestCount = activitySignups.filter((s: any) => 
+                    ['requested', 'assigned'].includes(s.status)
+                  ).length
 
                   return (
                     <div key={activity.id} className="p-4 bg-gray-50 rounded-lg">
@@ -234,9 +256,8 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
                             <p className="text-sm text-gray-600 mt-1">{activity.description}</p>
                           )}
                           <div className="text-sm text-gray-500 mt-2">
-                            {confirmedActivitySignups.length} signed up
-                            {activity.max_signups && ` · ${spotsLeft} spots left`}
-                            {waitlistSignups.length > 0 && ` · ${waitlistSignups.length} on waitlist`}
+                            {requestCount} requests · ~{activity.max_signups || '?'} slots
+                            {activity.schedule_published && ' · Schedule finalized'}
                           </div>
                         </div>
                         <ActivitySignup
@@ -244,24 +265,24 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
                           eventId={event.id}
                           currentStatus={userActivitySignup?.status || null}
                           signupId={userActivitySignup?.id || null}
-                          isFull={spotsLeft !== null && spotsLeft <= 0}
+                          isFull={false}
+                          requestedDuration={userActivitySignup?.requested_duration}
+                          workingOn={userActivitySignup?.working_on}
+                          assignedTime={userActivitySignup?.assigned_time}
+                          schedulePublished={activity.schedule_published}
+                          requestCount={requestCount}
+                          maxSignups={activity.max_signups}
                         />
                       </div>
 
-                      {/* Show signed up users */}
-                      {confirmedActivitySignups.length > 0 && (
-                        <div className="mt-3 pt-3 border-t border-gray-200">
-                          <p className="text-xs text-gray-500 mb-1">Signed up:</p>
-                          <div className="flex flex-wrap gap-1">
-                            {confirmedActivitySignups
-                              .sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-                              .map((signup: any, index: number) => (
-                                <span key={signup.id} className="text-xs bg-white px-2 py-1 rounded border">
-                                  {index + 1}. {signup.profile?.full_name}
-                                </span>
-                              ))}
-                          </div>
-                        </div>
+                      {/* Coach/Admin: Manage Schedule link */}
+                      {(isAdmin || isCoach) && (
+                        <Link 
+                          href={`/admin/events/${event.id}/activities/${activity.id}/schedule`}
+                          className="text-sm text-blue-600 hover:underline mt-2 inline-block"
+                        >
+                          Manage Schedule →
+                        </Link>
                       )}
                     </div>
                   )

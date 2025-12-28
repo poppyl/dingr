@@ -28,3 +28,12 @@ body {
 h1, h2, .text-app-title {
   font-family: var(--font-azeret-mono), monospace;
 }
+
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.animate-slide-up {
+  animation: slideUp 0.2s ease-out;
+}
