@@ -39,6 +39,9 @@ export default async function ActivitySchedulePage({
 
   if (!activity) notFound()
 
+  // Normalize event - Supabase returns single relations as arrays sometimes
+  const event = Array.isArray(activity.event) ? activity.event[0] : activity.event
+
   // Fetch all requests for this activity
   // Try requested_at first, fallback to created_at if the view uses that
   const { data: requests } = await supabase
@@ -55,7 +58,7 @@ export default async function ActivitySchedulePage({
             ← Back to event
           </Link>
           <h1 className="text-xl font-bold mt-2">{activity.name} Schedule</h1>
-          <p className="text-gray-600">{activity.event?.title}</p>
+          <p className="text-gray-600">{event?.title}</p>
         </div>
       </header>
 
