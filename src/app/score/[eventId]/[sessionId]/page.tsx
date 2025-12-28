@@ -29,6 +29,10 @@ export default async function ScoringSessionPage({
 
   if (!session) notFound()
 
+  // Normalize event - Supabase returns single relations as arrays sometimes
+  const event = Array.isArray(session.event) ? session.event[0] : session.event
+  const opponentTeamId = event?.opponent_team_id
+
   // Fetch current base state (most recent)
   const { data: currentState } = await supabase
     .from('base_states')
@@ -39,7 +43,7 @@ export default async function ScoringSessionPage({
     .single()
 
   // Fetch home team lineup
-  const { data: homeLineup } = await supabase
+  const { data: rawHomeLineup } = await supabase
     .from('game_lineups')
     .select(`
       id, batting_order, fielding_position,
@@ -48,11 +52,19 @@ export default async function ScoringSessionPage({
     .eq('event_id', eventId)
     .order('batting_order')
 
+  // Normalize lineup - player comes as array, convert to single object
+  const homeLineup = (rawHomeLineup || []).map(item => ({
+    id: item.id,
+    batting_order: item.batting_order,
+    fielding_position: item.fielding_position,
+    player: Array.isArray(item.player) ? item.player[0] : item.player
+  }))
+
   // Fetch opponent players
   const { data: awayPlayers } = await supabase
     .from('opponent_players')
     .select('id, name, jersey_number')
-    .eq('opponent_team_id', session.event?.opponent_team_id)
+    .eq('opponent_team_id', opponentTeamId)
     .order('jersey_number')
 
   // Fetch current at-bat if one is in progress
@@ -81,11 +93,21 @@ export default async function ScoringSessionPage({
     .order('created_at', { ascending: false })
     .limit(10)
 
+  // Normalize session.event for the component
+  const normalizedSession = {
+    ...session,
+    event: event ? {
+      ...event,
+      home_team: Array.isArray(event.home_team) ? event.home_team[0] : event.home_team,
+      away_team: Array.isArray(event.away_team) ? event.away_team[0] : event.away_team
+    } : null
+  }
+
   return (
     <ScoringInterface
-      session={session}
+      session={normalizedSession}
       currentState={currentState}
-      homeLineup={homeLineup || []}
+      homeLineup={homeLineup}
       awayPlayers={awayPlayers || []}
       currentAtBat={currentAtBat}
       recentPlays={recentPlays || []}
@@ -93,4 +115,3 @@ export default async function ScoringSessionPage({
     />
   )
 }
-

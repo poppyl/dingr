@@ -12,8 +12,6 @@ export default function FieldLocationPicker({ isOpen, onClose, onSelect }: Field
   const [selectedPos, setSelectedPos] = useState<{x: number, y: number} | null>(null)
   const svgRef = useRef<SVGSVGElement>(null)
 
-  if (!isOpen) return null
-
   const handleTap = (e: React.MouseEvent<SVGSVGElement> | React.TouchEvent<SVGSVGElement>) => {
     if (!svgRef.current) return
 
@@ -29,40 +27,56 @@ export default function FieldLocationPicker({ isOpen, onClose, onSelect }: Field
       clientY = e.clientY
     }
 
-    // Convert to 0-100 coordinate space
-    const x = Math.round(((clientX - rect.left) / rect.width) * 100)
-    const y = Math.round(((clientY - rect.top) / rect.height) * 100)
+    // Convert to SVG coordinate space (viewBox is 0 0 1690 1380)
+    const x = Math.round(((clientX - rect.left) / rect.width) * 1690)
+    const y = Math.round(((clientY - rect.top) / rect.height) * 1380)
 
     setSelectedPos({ x, y })
   }
 
   const getPositionFromCoords = (x: number, y: number): string => {
     // Map visual coordinates to fielding positions
-    // Y axis: 0 = top (outfield), 100 = bottom (home plate)
-    // X axis: 0 = left (3B/LF), 100 = right (1B/RF)
+    // ViewBox is 1690x1380, center is around x=845, home plate at y=1262
     
-    if (y < 30) {
-      // Outfield
-      if (x < 35) return 'LF'
-      if (x > 65) return 'RF'
+    // Deep outfield (very top)
+    if (y < 400) {
+      if (x < 600) return 'LF'
+      if (x > 1090) return 'RF'
       return 'CF'
     }
     
-    if (y < 55) {
-      // Infield corners and middle
-      if (x < 30) return '3B'
-      if (x > 70) return '1B'
-      if (x < 45) return 'SS'
-      if (x > 55) return '2B'
+    // Outfield
+    if (y < 600) {
+      if (x < 500) return 'LF'
+      if (x > 1190) return 'RF'
+      return 'CF'
+    }
+    
+    // Shallow outfield
+    if (y < 750) {
+      if (x < 450) return 'LF'
+      if (x > 1240) return 'RF'
+      if (x < 650) return 'SS'
+      if (x > 1040) return '2B'
+      return 'CF'
+    }
+    
+    // Infield
+    if (y < 1000) {
+      if (x < 550) return '3B'
+      if (x > 1140) return '1B'
+      if (x < 720) return 'SS'
+      if (x > 970) return '2B'
       return 'P'
     }
     
-    if (y < 75) {
-      // Pitcher area
+    // Near home plate
+    if (y < 1150) {
+      if (x < 600) return '3B'
+      if (x > 1090) return '1B'
       return 'P'
     }
     
-    // Catcher area
     return 'C'
   }
 
@@ -70,8 +84,8 @@ export default function FieldLocationPicker({ isOpen, onClose, onSelect }: Field
     if (selectedPos) {
       const position = getPositionFromCoords(selectedPos.x, selectedPos.y)
       // Convert to 10x10 grid for storage
-      const gridX = Math.floor(selectedPos.x / 10)
-      const gridY = Math.floor(selectedPos.y / 10)
+      const gridX = Math.floor(selectedPos.x / 169)
+      const gridY = Math.floor(selectedPos.y / 138)
       onSelect(gridX, gridY, position)
       setSelectedPos(null)
     }
@@ -82,68 +96,110 @@ export default function FieldLocationPicker({ isOpen, onClose, onSelect }: Field
     onClose()
   }
 
+  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.target === e.currentTarget) {
+      handleClose()
+    }
+  }
+
+  if (!isOpen) return null
+
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b">
-          <h2 className="font-semibold text-lg">Where was ball fielded?</h2>
-          <button onClick={handleClose} className="text-gray-500">Cancel</button>
+    <div 
+      className="fixed inset-0 bg-black/50 z-50"
+      onClick={handleBackdropClick}
+    >
+      <div 
+        className="fixed bottom-0 left-0 right-0 rounded-t-3xl shadow-2xl overflow-hidden flex flex-col"
+        style={{ height: '85vh', backgroundColor: '#24a062' }}
+      >
+        {/* Drag handle */}
+        <div className="flex justify-center pt-3 pb-1">
+          <div className="w-12 h-1.5 bg-white/50 rounded-full" />
         </div>
 
-        {/* Field Diagram */}
-        <div className="p-4">
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-2">
+          <h2 className="font-semibold text-lg bg-white/95 backdrop-blur-sm px-4 py-2 rounded-xl shadow-lg">
+            Set the ball trajectory
+          </h2>
+          <button 
+            onClick={handleClose} 
+            className="bg-white/95 backdrop-blur-sm px-4 py-2 rounded-xl shadow-lg text-gray-600 hover:text-gray-900 font-medium"
+          >
+            Cancel
+          </button>
+        </div>
+
+        {/* Field Diagram - fills remaining space */}
+        <div className="flex-1 min-h-0 px-2">
           <svg 
             ref={svgRef}
-            viewBox="0 0 100 100" 
-            className="w-full aspect-square rounded-xl cursor-pointer touch-none"
+            viewBox="0 0 1690 1380" 
+            className="w-full h-full cursor-pointer touch-none"
+            preserveAspectRatio="xMidYMid meet"
             onClick={handleTap}
             onTouchStart={handleTap}
           >
-            {/* Background - outfield grass */}
-            <rect x="0" y="0" width="100" height="100" fill="#166534" />
+            {/* Background - darker green */}
+            <rect width="1690" height="1380" fill="#24a062"/>
             
-            {/* Outfield arc */}
+            {/* Outfield grass - lighter green arc */}
             <path 
-              d="M 0 60 Q 50 -20 100 60" 
-              fill="#15803d" 
-              stroke="#14532d"
-              strokeWidth="0.5"
+              d="M1582.94,516.28c-149.43-253.65-425.36-423.85-741.05-423.85S252.85,261.05,102.94,512.74l741.54,741.17,738.46-737.62Z" 
+              fill="#2bb673"
             />
             
-            {/* Infield dirt */}
-            <polygon 
-              points="50,25 75,50 50,75 25,50" 
-              fill="#a16207"
+            {/* Infield dirt arc - brown horseshoe */}
+            <path 
+              d="M1287.32,819.53c-44.02-205.65-226.79-359.85-445.58-359.85s-398.41,151.55-444.42,354.54l447,453.38,443-448.07Z" 
+              fill="#bc804d"
             />
             
-            {/* Infield grass */}
-            <circle cx="50" cy="50" r="12" fill="#166534" />
+            {/* Infield grass - green diamond */}
+            <rect 
+              x="597.82" y="669.04" 
+              width="494.97" height="494.97" 
+              fill="#2bb673"
+              transform="translate(-400.5 866.17) rotate(-45)"
+            />
+            
+            {/* Pitcher's mound - brown circle */}
+            <circle cx="841.73" cy="915.86" r="70" fill="#bc804d"/>
+            
+            {/* Second base area dirt - brown circle */}
+            <circle cx="841.73" cy="593.22" r="70" fill="#bc804d"/>
+            
+            {/* First base dirt arc */}
+            <path 
+              d="M1230.33,880.32c-12.18-20.63-34.63-34.46-60.32-34.46-38.66,0-70,31.34-70,70,0,25.66,13.81,48.1,34.4,60.28" 
+              fill="#bc804d"
+            />
+            
+            {/* Third base dirt arc */}
+            <path 
+              d="M552.58,973.9c18.62-12.58,30.86-33.88,30.86-58.05,0-38.66-31.34-70-70-70-24.07,0-45.3,12.15-57.9,30.65" 
+              fill="#bc804d"
+            />
             
             {/* Foul lines */}
-            <line x1="50" y1="85" x2="0" y2="35" stroke="white" strokeWidth="0.5" />
-            <line x1="50" y1="85" x2="100" y2="35" stroke="white" strokeWidth="0.5" />
+            <line x1="842.25" y1="1266.67" x2="1623.27" y2="486.67" stroke="#fff" strokeWidth="10" strokeMiterlimit="10" fill="none"/>
+            <line x1="847.75" y1="1266.67" x2="66.73" y2="486.67" stroke="#fff" strokeWidth="10" strokeMiterlimit="10" fill="none"/>
             
-            {/* Bases */}
-            <rect x="48" y="23" width="4" height="4" fill="white" transform="rotate(45 50 25)" />
-            <rect x="73" y="48" width="4" height="4" fill="white" transform="rotate(45 75 50)" />
-            <rect x="23" y="48" width="4" height="4" fill="white" transform="rotate(45 25 50)" />
+            {/* Home plate area - brown circle */}
+            <circle cx="844.73" cy="1262.34" r="85.23" fill="#bc804d"/>
             
-            {/* Home plate */}
-            <polygon points="50,81 46,85 50,89 54,85" fill="white" />
+            {/* Home plate - white pentagon */}
+            <polygon points="874.73 1282.57 844.73 1311.53 814.73 1282.57 814.73 1231.34 874.73 1231.34 874.73 1282.57" fill="#fff"/>
             
-            {/* Pitcher's mound */}
-            <circle cx="50" cy="55" r="3" fill="#a16207" stroke="#854d0e" strokeWidth="0.5" />
+            {/* Second base - white diamond */}
+            <rect x="819.27" y="578.83" width="50.91" height="50.91" fill="#fff" transform="translate(-179.88 774.3) rotate(-45)"/>
             
-            {/* Position labels */}
-            <text x="50" y="12" textAnchor="middle" fill="white" fontSize="5" fontWeight="bold">CF</text>
-            <text x="15" y="25" textAnchor="middle" fill="white" fontSize="5" fontWeight="bold">LF</text>
-            <text x="85" y="25" textAnchor="middle" fill="white" fontSize="5" fontWeight="bold">RF</text>
-            <text x="28" y="48" textAnchor="middle" fill="white" fontSize="4" fontWeight="bold">3B</text>
-            <text x="72" y="48" textAnchor="middle" fill="white" fontSize="4" fontWeight="bold">1B</text>
-            <text x="38" y="38" textAnchor="middle" fill="white" fontSize="4" fontWeight="bold">SS</text>
-            <text x="62" y="38" textAnchor="middle" fill="white" fontSize="4" fontWeight="bold">2B</text>
-            <text x="50" y="58" textAnchor="middle" fill="white" fontSize="4" fontWeight="bold">P</text>
+            {/* First base - white diamond */}
+            <rect x="1129.43" y="890.4" width="50.91" height="50.91" fill="#fff" transform="translate(-309.35 1084.87) rotate(-45)"/>
+            
+            {/* Third base - white diamond */}
+            <rect x="509.12" y="890.4" width="50.91" height="50.91" fill="#fff" transform="translate(-491.04 646.25) rotate(-45)"/>
             
             {/* Selected location marker */}
             {selectedPos && (
@@ -151,15 +207,15 @@ export default function FieldLocationPicker({ isOpen, onClose, onSelect }: Field
                 <circle 
                   cx={selectedPos.x} 
                   cy={selectedPos.y} 
-                  r="4" 
+                  r="40" 
                   fill="#ef4444" 
                   stroke="white"
-                  strokeWidth="1.5"
+                  strokeWidth="8"
                 />
                 <circle 
                   cx={selectedPos.x} 
                   cy={selectedPos.y} 
-                  r="1.5" 
+                  r="12" 
                   fill="white"
                 />
               </g>
@@ -167,27 +223,28 @@ export default function FieldLocationPicker({ isOpen, onClose, onSelect }: Field
           </svg>
         </div>
 
-        {/* Footer */}
-        <div className="p-4 border-t bg-gray-50">
+        {/* Bottom UI - fixed height to prevent field from moving */}
+        <div className="px-4 pb-4 pt-2" style={{ height: '160px' }}>
           {selectedPos ? (
             <div className="space-y-3">
-              <p className="text-center text-gray-600">
-                Fielded by: <strong className="text-gray-900">
-                  {getPositionFromCoords(selectedPos.x, selectedPos.y)}
-                </strong>
-              </p>
+              <div className="bg-white/95 backdrop-blur-sm rounded-xl px-4 py-3 shadow-lg text-center">
+                <span className="text-gray-600">Fielded by: </span>
+                <strong className="text-gray-900 text-lg">{getPositionFromCoords(selectedPos.x, selectedPos.y)}</strong>
+              </div>
               <button
                 onClick={handleConfirm}
-                className="w-full py-3 bg-blue-600 text-white font-semibold rounded-xl 
-                  hover:bg-blue-700 active:bg-blue-800"
+                className="w-full py-4 bg-blue-600 text-white font-semibold rounded-xl 
+                  hover:bg-blue-700 active:bg-blue-800 transition-colors shadow-lg text-lg"
               >
                 Confirm Location
               </button>
             </div>
           ) : (
-            <p className="text-center text-gray-500">
-              Tap the field where the ball was caught or fielded
-            </p>
+            <div className="bg-white/95 backdrop-blur-sm rounded-xl px-4 py-3 shadow-lg">
+              <p className="text-center text-gray-600">
+                Tap the field where the ball was caught or fielded
+              </p>
+            </div>
           )}
         </div>
       </div>

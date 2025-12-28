@@ -18,62 +18,45 @@ export default function DiamondDisplay({
   outs
 }: DiamondDisplayProps) {
   return (
-    <div className="bg-white flex items-center justify-between p-4 border-b">
-      {/* SVG Diamond */}
-      <svg viewBox="0 0 100 100" className="w-20 h-20">
-        {/* Infield grass */}
-        <polygon 
-          points="50,15 85,50 50,85 15,50" 
-          fill="#4ade80"
-          stroke="#16a34a"
-          strokeWidth="1"
+    <div className="bg-white flex items-center justify-between px-4 py-3 border-b">
+      {/* Diamond visualization - exact layout from reference */}
+      <svg 
+        xmlns="http://www.w3.org/2000/svg" 
+        width="101" 
+        height="40" 
+        viewBox="0 0 101 40" 
+        fill="none"
+        className="w-28"
+      >
+        {/* Second base (top center) */}
+        <path 
+          d="M72.3622 12.54L50.1542 24.5117L27.9462 12.54L50.1542 0.567383L72.3622 12.54Z" 
+          fill={runnerSecond ? '#F5B335' : 'white'}
+          stroke="black"
         />
-        
-        {/* Second base */}
-        <rect 
-          x="46" y="11" width="8" height="8" 
-          fill={runnerSecond ? "#fbbf24" : "white"} 
-          stroke="#374151"
-          strokeWidth="1"
-          transform="rotate(45 50 15)"
+        {/* Third base (bottom left) */}
+        <path 
+          d="M45.4697 27.4597L23.2617 39.4313L1.05371 27.4597L23.2617 15.487L45.4697 27.4597Z" 
+          fill={runnerThird ? '#F5B335' : 'white'}
+          stroke="black"
         />
-        
-        {/* First base */}
-        <rect 
-          x="81" y="46" width="8" height="8" 
-          fill={runnerFirst ? "#fbbf24" : "white"} 
-          stroke="#374151"
-          strokeWidth="1"
-          transform="rotate(45 85 50)"
-        />
-        
-        {/* Third base */}
-        <rect 
-          x="11" y="46" width="8" height="8" 
-          fill={runnerThird ? "#fbbf24" : "white"} 
-          stroke="#374151"
-          strokeWidth="1"
-          transform="rotate(45 15 50)"
-        />
-        
-        {/* Home plate */}
-        <polygon 
-          points="50,78 45,85 50,90 55,85" 
-          fill="white"
-          stroke="#374151"
-          strokeWidth="1"
+        {/* First base (bottom right) */}
+        <path 
+          d="M99.1288 27.4597L76.9208 39.4313L54.7128 27.4597L76.9208 15.487L99.1288 27.4597Z" 
+          fill={runnerFirst ? '#F5B335' : 'white'}
+          stroke="black"
         />
       </svg>
 
-      {/* Count display */}
-      <div className="space-y-2">
+      {/* Count indicators - right side: B, S, O */}
+      <div className="flex flex-col gap-1.5">
         {/* Balls */}
         <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-gray-500 w-4">B</span>
+          <span className="text-sm font-medium text-gray-600 w-4">B</span>
           <div className="flex gap-1">
-            {[0, 1, 2, 3].map(i => (
-              <div 
-                key={i}
+            {[0, 1, 2, 3].map((i) => (
+              <div
+                key={`ball-${i}`}
                 className={`w-4 h-4 rounded-full border-2 ${
                   i < balls 
                     ? 'bg-green-500 border-green-500' 
@@ -86,14 +69,14 @@ export default function DiamondDisplay({
         
         {/* Strikes */}
         <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-gray-500 w-4">S</span>
+          <span className="text-sm font-medium text-gray-600 w-4">S</span>
           <div className="flex gap-1">
-            {[0, 1, 2].map(i => (
-              <div 
-                key={i}
+            {[0, 1, 2].map((i) => (
+              <div
+                key={`strike-${i}`}
                 className={`w-4 h-4 rounded-full border-2 ${
                   i < strikes 
-                    ? 'bg-yellow-500 border-yellow-500' 
+                    ? 'bg-yellow-400 border-yellow-400' 
                     : 'bg-white border-gray-300'
                 }`}
               />
@@ -103,11 +86,11 @@ export default function DiamondDisplay({
         
         {/* Outs */}
         <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-gray-500 w-4">O</span>
+          <span className="text-sm font-medium text-gray-600 w-4">O</span>
           <div className="flex gap-1">
-            {[0, 1, 2].map(i => (
-              <div 
-                key={i}
+            {[0, 1, 2].map((i) => (
+              <div
+                key={`out-${i}`}
                 className={`w-4 h-4 rounded-full border-2 ${
                   i < outs 
                     ? 'bg-red-500 border-red-500' 
@@ -121,4 +104,3 @@ export default function DiamondDisplay({
     </div>
   )
 }
-
