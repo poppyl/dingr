@@ -1,7 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
-import Image from 'next/image'
 import GameSignupButtons from './game-signup-buttons'
 import ActivitySignup from './activity-signup'
 
@@ -91,7 +90,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
 
   const isAdmin = profile?.role === 'admin'
   const isCoach = profile?.role === 'coach'
-  const canManage = isAdmin || isCoach
+  const canScore = isAdmin || isCoach
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -103,12 +102,12 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
             </Link>
           </div>
           <div className="flex items-center gap-2">
-            {event.type === 'game' && canManage && (
+            {event.type === 'game' && canScore && (
               <Link
-                href={`/admin/events/${id}/lineup`}
+                href={`/score/${id}`}
                 className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700"
               >
-                Set Lineup
+                ⚾ Score Game
               </Link>
             )}
             {isAdmin && (
@@ -218,6 +217,31 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
             </div>
           )}
         </div>
+
+        {/* Game actions - Lineup and Scoring */}
+        {event.type === 'game' && event.status !== 'cancelled' && (isAdmin || isCoach) && (
+          <div className="bg-white rounded-xl p-6 border border-gray-200">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Game Day</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <Link
+                href={`/admin/events/${id}/lineup`}
+                className="p-4 bg-blue-50 rounded-xl border border-blue-200 hover:bg-blue-100 transition-colors text-center"
+              >
+                <div className="text-2xl mb-1">📋</div>
+                <div className="font-medium text-blue-900">Set Lineup</div>
+                <div className="text-xs text-blue-600">Batting order & positions</div>
+              </Link>
+              <Link
+                href={`/score/${id}`}
+                className="p-4 bg-green-50 rounded-xl border border-green-200 hover:bg-green-100 transition-colors text-center"
+              >
+                <div className="text-2xl mb-1">⚾</div>
+                <div className="font-medium text-green-900">Score Game</div>
+                <div className="text-xs text-green-600">Live scoring interface</div>
+              </Link>
+            </div>
+          </div>
+        )}
 
         {/* Training activities */}
         {event.type === 'training' && event.status !== 'cancelled' && (

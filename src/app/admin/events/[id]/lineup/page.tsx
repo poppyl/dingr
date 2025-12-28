@@ -6,11 +6,10 @@ import LineupEditor from './lineup-editor'
 export default async function LineupPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
-  
+
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  // Check permissions
   const { data: profile } = await supabase
     .from('profiles')
     .select('role')
@@ -35,6 +34,36 @@ export default async function LineupPage({ params }: { params: Promise<{ id: str
 
   if (!event) notFound()
 
+  // Get the user's team memberships to verify they belong to this event's team
+  const { data: userTeamMembership } = await supabase
+    .from('team_members')
+    .select('team_id')
+    .eq('profile_id', user.id)
+    .eq('team_id', event.team_id)
+    .single()
+
+  // User must be a member of the event's team (or be a global admin)
+  const isGlobalAdmin = profile.role === 'admin'
+  const isTeamMember = !!userTeamMembership
+
+  if (!isGlobalAdmin && !isTeamMember) {
+    // User is a coach but not on this team - they can view but not edit
+    redirect(`/schedule/${id}`)
+  }
+
+  // Determine which team is home and which is away based on is_home_game
+  // is_home_game means OUR team (event.team) is the home team
+  const isHomeGame = event.is_home_game ?? true
+  
+  // Our team is always event.team (from the teams table)
+  // Opponent is always event.opponent (from opponent_teams table)
+  const ourTeamName = (event.team as any)?.name || 'Our Team'
+  const opponentTeamName = (event.opponent as any)?.name || 'Opponent'
+  
+  // But home/away labels depend on is_home_game
+  const homeTeamName = isHomeGame ? ourTeamName : opponentTeamName
+  const awayTeamName = isHomeGame ? opponentTeamName : ourTeamName
+
   // Get our team's players (from team_members)
   const { data: teamPlayers } = await supabase
     .from('team_members')
@@ -46,8 +75,8 @@ export default async function LineupPage({ params }: { params: Promise<{ id: str
     .eq('team_id', event.team_id)
     .order('jersey_number')
 
-  // Get current home lineup
-  const { data: homeLineup } = await supabase
+  // Get current lineup for our team (game_lineups)
+  const { data: ourLineup } = await supabase
     .from('game_lineups')
     .select('id, batting_order, fielding_position, profile_id')
     .eq('event_id', id)
@@ -60,8 +89,8 @@ export default async function LineupPage({ params }: { params: Promise<{ id: str
     .eq('opponent_team_id', event.opponent_team_id)
     .order('jersey_number')
 
-  // Get current opponent lineup
-  const { data: awayLineup } = await supabase
+  // Get current opponent lineup (opponent_lineups)
+  const { data: opponentLineup } = await supabase
     .from('opponent_lineups')
     .select('id, batting_order, fielding_position, opponent_player_id')
     .eq('event_id', id)
@@ -74,7 +103,7 @@ export default async function LineupPage({ params }: { params: Promise<{ id: str
           <Link href={`/schedule/${id}`} className="text-gray-500 hover:text-gray-700">
             ← Back
           </Link>
-          <h1 className="text-xl font-bold text-gray-900">Set Lineup</h1>
+          <h1 className="text-xl font-bold text-gray-900 font-display">Set Lineup</h1>
         </div>
       </header>
 
@@ -85,9 +114,11 @@ export default async function LineupPage({ params }: { params: Promise<{ id: str
 
         <LineupEditor
           eventId={id}
-          homeTeamName={(event.team as any)?.name || 'Home Team'}
-          awayTeamName={(event.opponent as any)?.name || 'Away Team'}
-          isHomeGame={event.is_home_game ?? true}
+          ourTeamName={ourTeamName}
+          opponentTeamName={opponentTeamName}
+          homeTeamName={homeTeamName}
+          awayTeamName={awayTeamName}
+          isHomeGame={isHomeGame}
           teamPlayers={teamPlayers?.map(p => ({
             id: (p.profile as any)?.id || '',
             name: (p.profile as any)?.full_name || 'Unknown',
@@ -98,8 +129,8 @@ export default async function LineupPage({ params }: { params: Promise<{ id: str
             name: p.name,
             jerseyNumber: p.jersey_number
           })) || []}
-          initialHomeLineup={homeLineup || []}
-          initialAwayLineup={awayLineup || []}
+          initialOurLineup={ourLineup || []}
+          initialOpponentLineup={opponentLineup || []}
           opponentTeamId={event.opponent_team_id || ''}
         />
       </main>

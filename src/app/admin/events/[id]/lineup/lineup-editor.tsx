@@ -20,13 +20,15 @@ interface LineupEntry {
 
 interface LineupEditorProps {
   eventId: string
+  ourTeamName: string
+  opponentTeamName: string
   homeTeamName: string
   awayTeamName: string
   isHomeGame: boolean
   teamPlayers: Player[]
   opponentPlayers: Player[]
-  initialHomeLineup: LineupEntry[]
-  initialAwayLineup: LineupEntry[]
+  initialOurLineup: LineupEntry[]
+  initialOpponentLineup: LineupEntry[]
   opponentTeamId: string
 }
 
@@ -34,27 +36,29 @@ const POSITIONS = ['P', 'C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH']
 
 export default function LineupEditor({
   eventId,
+  ourTeamName,
+  opponentTeamName,
   homeTeamName,
   awayTeamName,
   isHomeGame,
   teamPlayers,
   opponentPlayers: initialOpponentPlayers,
-  initialHomeLineup,
-  initialAwayLineup,
+  initialOurLineup,
+  initialOpponentLineup,
   opponentTeamId
 }: LineupEditorProps) {
   const router = useRouter()
   const supabase = createClient()
 
   // Initialize lineup state (9 slots)
-  const initLineup = (existing: LineupEntry[], isOurTeam: boolean) => {
+  const initLineup = (existing: LineupEntry[], useProfileId: boolean) => {
     const lineup: (string | null)[] = Array(9).fill(null)
     const positions: (string | null)[] = Array(9).fill(null)
     
     existing.forEach(entry => {
       const idx = entry.batting_order - 1
       if (idx >= 0 && idx < 9) {
-        lineup[idx] = isOurTeam ? entry.profile_id || null : entry.opponent_player_id || null
+        lineup[idx] = useProfileId ? entry.profile_id || null : entry.opponent_player_id || null
         positions[idx] = entry.fielding_position || null
       }
     })
@@ -62,86 +66,41 @@ export default function LineupEditor({
     return { lineup, positions }
   }
 
-  const ourInit = isHomeGame ? initLineup(initialHomeLineup, true) : initLineup(initialAwayLineup, false)
-  const theirInit = isHomeGame ? initLineup(initialAwayLineup, false) : initLineup(initialHomeLineup, true)
+  const ourInit = initLineup(initialOurLineup, true)
+  const opponentInit = initLineup(initialOpponentLineup, false)
 
   const [ourLineup, setOurLineup] = useState<(string | null)[]>(ourInit.lineup)
   const [ourPositions, setOurPositions] = useState<(string | null)[]>(ourInit.positions)
-  const [theirLineup, setTheirLineup] = useState<(string | null)[]>(theirInit.lineup)
-  const [theirPositions, setTheirPositions] = useState<(string | null)[]>(theirInit.positions)
-  const [opponentPlayers, setOpponentPlayers] = useState<Player[]>(initialOpponentPlayers)
+  const [opponentLineup] = useState<(string | null)[]>(opponentInit.lineup)
+  const [opponentPositions] = useState<(string | null)[]>(opponentInit.positions)
+  const [opponentPlayers] = useState<Player[]>(initialOpponentPlayers)
   const [saving, setSaving] = useState(false)
   const [activeTab, setActiveTab] = useState<'ours' | 'theirs'>('ours')
-  
-  // Add player form state
-  const [showAddPlayer, setShowAddPlayer] = useState(false)
-  const [newPlayerName, setNewPlayerName] = useState('')
-  const [newPlayerNumber, setNewPlayerNumber] = useState('')
 
-  const handlePlayerSelect = (index: number, playerId: string | null, isOurs: boolean) => {
-    if (isOurs) {
-      const newLineup = [...ourLineup]
-      newLineup[index] = playerId
-      setOurLineup(newLineup)
-    } else {
-      const newLineup = [...theirLineup]
-      newLineup[index] = playerId
-      setTheirLineup(newLineup)
-    }
+  const handlePlayerSelect = (slotIndex: number, playerId: string | null) => {
+    const newLineup = [...ourLineup]
+    newLineup[slotIndex] = playerId
+    setOurLineup(newLineup)
   }
 
-  const handlePositionSelect = (index: number, position: string | null, isOurs: boolean) => {
-    if (isOurs) {
-      const newPositions = [...ourPositions]
-      newPositions[index] = position
-      setOurPositions(newPositions)
-    } else {
-      const newPositions = [...theirPositions]
-      newPositions[index] = position
-      setTheirPositions(newPositions)
-    }
+  const handlePositionSelect = (slotIndex: number, position: string | null) => {
+    const newPositions = [...ourPositions]
+    newPositions[slotIndex] = position
+    setOurPositions(newPositions)
   }
 
-  const getAvailablePlayers = (currentIndex: number, isOurs: boolean) => {
-    const lineup = isOurs ? ourLineup : theirLineup
-    const players = isOurs ? teamPlayers : opponentPlayers
-    const selectedIds = lineup.filter((id, idx) => id && idx !== currentIndex)
-    return players.filter(p => !selectedIds.includes(p.id))
-  }
-
-  const handleAddOpponentPlayer = async () => {
-    if (!newPlayerName.trim()) return
-
-    const { data, error } = await supabase
-      .from('opponent_players')
-      .insert({
-        opponent_team_id: opponentTeamId,
-        name: newPlayerName.trim(),
-        jersey_number: newPlayerNumber ? parseInt(newPlayerNumber) : null
-      })
-      .select('id, name, jersey_number')
-      .single()
-
-    if (!error && data) {
-      setOpponentPlayers([...opponentPlayers, {
-        id: data.id,
-        name: data.name,
-        jerseyNumber: data.jersey_number
-      }])
-      setNewPlayerName('')
-      setNewPlayerNumber('')
-      setShowAddPlayer(false)
-    }
+  const getAvailablePlayers = (currentSlotIndex: number) => {
+    const usedPlayerIds = ourLineup.filter((id, idx) => id && idx !== currentSlotIndex)
+    return teamPlayers.filter(p => !usedPlayerIds.includes(p.id))
   }
 
   const handleSave = async () => {
     setSaving(true)
 
-    // Delete existing lineups for this event
+    // Delete existing lineup for our team
     await supabase.from('game_lineups').delete().eq('event_id', eventId)
-    await supabase.from('opponent_lineups').delete().eq('event_id', eventId)
 
-    // Insert our team's lineup
+    // Insert new lineup for our team
     const ourLineupData = ourLineup
       .map((playerId, idx) => playerId ? {
         event_id: eventId,
@@ -155,30 +114,12 @@ export default function LineupEditor({
       await supabase.from('game_lineups').insert(ourLineupData)
     }
 
-    // Insert opponent's lineup
-    const theirLineupData = theirLineup
-      .map((playerId, idx) => playerId ? {
-        event_id: eventId,
-        opponent_player_id: playerId,
-        batting_order: idx + 1,
-        fielding_position: theirPositions[idx]
-      } : null)
-      .filter(Boolean)
-
-    if (theirLineupData.length > 0) {
-      await supabase.from('opponent_lineups').insert(theirLineupData)
-    }
-
     setSaving(false)
     router.push(`/schedule/${eventId}`)
     router.refresh()
   }
 
-  const renderLineupSlots = (isOurs: boolean) => {
-    const lineup = isOurs ? ourLineup : theirLineup
-    const positions = isOurs ? ourPositions : theirPositions
-    const players = isOurs ? teamPlayers : opponentPlayers
-
+  const renderOurLineupSlots = () => {
     return (
       <div className="space-y-3">
         {Array.from({ length: 9 }, (_, idx) => (
@@ -188,27 +129,27 @@ export default function LineupEditor({
             </div>
             
             <select
-              value={lineup[idx] || ''}
-              onChange={(e) => handlePlayerSelect(idx, e.target.value || null, isOurs)}
+              value={ourLineup[idx] || ''}
+              onChange={(e) => handlePlayerSelect(idx, e.target.value || null)}
               className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm"
             >
               <option value="">Select player...</option>
-              {getAvailablePlayers(idx, isOurs).map(player => (
+              {getAvailablePlayers(idx).map(player => (
                 <option key={player.id} value={player.id}>
                   {player.jerseyNumber ? `#${player.jerseyNumber} ` : ''}{player.name}
                 </option>
               ))}
               {/* Show currently selected player even if they'd normally be filtered */}
-              {lineup[idx] && !getAvailablePlayers(idx, isOurs).find(p => p.id === lineup[idx]) && (
-                <option value={lineup[idx]!}>
-                  {players.find(p => p.id === lineup[idx])?.name || 'Unknown'}
+              {ourLineup[idx] && !getAvailablePlayers(idx).find(p => p.id === ourLineup[idx]) && (
+                <option value={ourLineup[idx]!}>
+                  {teamPlayers.find(p => p.id === ourLineup[idx])?.name || 'Unknown'}
                 </option>
               )}
             </select>
 
             <select
-              value={positions[idx] || ''}
-              onChange={(e) => handlePositionSelect(idx, e.target.value || null, isOurs)}
+              value={ourPositions[idx] || ''}
+              onChange={(e) => handlePositionSelect(idx, e.target.value || null)}
               className="w-20 px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm"
             >
               <option value="">Pos</option>
@@ -222,9 +163,54 @@ export default function LineupEditor({
     )
   }
 
+  const renderOpponentLineupReadOnly = () => {
+    const hasAnyLineup = opponentLineup.some(p => p !== null)
+    
+    if (!hasAnyLineup) {
+      return (
+        <div className="text-center py-8 text-gray-500">
+          <p>No lineup set yet</p>
+          <p className="text-sm mt-1">The opponent&apos;s lineup will appear here once they set it.</p>
+        </div>
+      )
+    }
+
+    return (
+      <div className="space-y-3">
+        {Array.from({ length: 9 }, (_, idx) => {
+          const playerId = opponentLineup[idx]
+          const player = playerId ? opponentPlayers.find(p => p.id === playerId) : null
+          const position = opponentPositions[idx]
+
+          return (
+            <div key={idx} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+              <div className="w-8 h-8 flex items-center justify-center bg-gray-200 rounded-full text-sm font-bold text-gray-600">
+                {idx + 1}
+              </div>
+              
+              <div className="flex-1 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-600">
+                {player ? (
+                  <span>
+                    {player.jerseyNumber ? `#${player.jerseyNumber} ` : ''}{player.name}
+                  </span>
+                ) : (
+                  <span className="text-gray-400">—</span>
+                )}
+              </div>
+
+              <div className="w-20 px-2 py-2 bg-white border border-gray-200 rounded-lg text-sm text-center text-gray-600">
+                {position || '—'}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
-      {/* Tabs */}
+      {/* Tabs - Our team vs Their team */}
       <div className="flex border-b border-gray-200">
         <button
           onClick={() => setActiveTab('ours')}
@@ -234,7 +220,7 @@ export default function LineupEditor({
               : 'border-transparent text-gray-500 hover:text-gray-700'
           }`}
         >
-          {isHomeGame ? homeTeamName : awayTeamName} (Us)
+          {ourTeamName} (Us)
         </button>
         <button
           onClick={() => setActiveTab('theirs')}
@@ -244,7 +230,7 @@ export default function LineupEditor({
               : 'border-transparent text-gray-500 hover:text-gray-700'
           }`}
         >
-          {isHomeGame ? awayTeamName : homeTeamName} (Them)
+          {opponentTeamName} (Them)
         </button>
       </div>
 
@@ -254,67 +240,47 @@ export default function LineupEditor({
           {activeTab === 'ours' ? 'Our Batting Order' : 'Their Batting Order'}
         </h2>
         
-        {renderLineupSlots(activeTab === 'ours')}
-
-        {/* Add opponent player button */}
-        {activeTab === 'theirs' && (
-          <div className="mt-4 pt-4 border-t border-gray-200">
-            {showAddPlayer ? (
-              <div className="space-y-3">
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Player name"
-                    value={newPlayerName}
-                    onChange={(e) => setNewPlayerName(e.target.value)}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                  />
-                  <input
-                    type="number"
-                    placeholder="#"
-                    value={newPlayerNumber}
-                    onChange={(e) => setNewPlayerNumber(e.target.value)}
-                    className="w-16 px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleAddOpponentPlayer}
-                    className="px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700"
-                  >
-                    Add Player
-                  </button>
-                  <button
-                    onClick={() => {
-                      setShowAddPlayer(false)
-                      setNewPlayerName('')
-                      setNewPlayerNumber('')
-                    }}
-                    className="px-3 py-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <button
-                onClick={() => setShowAddPlayer(true)}
-                className="text-sm text-blue-600 hover:underline"
-              >
-                + Add new opponent player
-              </button>
-            )}
-          </div>
+        {activeTab === 'ours' ? (
+          renderOurLineupSlots()
+        ) : (
+          <>
+            <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-lg text-sm text-orange-700">
+              View only — you cannot edit the opponent&apos;s lineup
+            </div>
+            {renderOpponentLineupReadOnly()}
+          </>
         )}
       </div>
 
-      {/* Save button */}
+      {/* Summary */}
+      <div className="bg-gray-50 rounded-lg p-4 text-sm text-gray-600">
+        <div className="flex justify-between">
+          <span>{homeTeamName} (Home):</span>
+          <span>
+            {isHomeGame 
+              ? `${ourLineup.filter(Boolean).length}/9 set`
+              : `${opponentLineup.filter(Boolean).length}/9 set`
+            }
+          </span>
+        </div>
+        <div className="flex justify-between mt-1">
+          <span>{awayTeamName} (Away):</span>
+          <span>
+            {isHomeGame 
+              ? `${opponentLineup.filter(Boolean).length}/9 set`
+              : `${ourLineup.filter(Boolean).length}/9 set`
+            }
+          </span>
+        </div>
+      </div>
+
+      {/* Save button - only saves our lineup */}
       <button
         onClick={handleSave}
         disabled={saving}
         className="w-full px-4 py-3 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        {saving ? 'Saving...' : 'Save Lineups'}
+        {saving ? 'Saving...' : 'Save Our Lineup'}
       </button>
     </div>
   )
